@@ -1,0 +1,30 @@
+{
+	"manifest_version": 2,
+	"name": "ffifapi",
+	"version": "1.4",
+	"description": "Firefox Interface API Extension over Websockets",
+	
+	"background": {
+		"scripts": [
+			"addon/background.js",
+			"addon/comm.js",
+			"addon/handler.js",
+			"addon/browser.js"
+		]
+	},
+	"permissions": [
+		"tabs",
+		"activeTab",
+		"cookies",
+		"contextualIdentities",
+		"alarms"
+	],
+	"content_scripts": [
+		{
+			"matches": ["http://*/*", "https://*/*"],
+			"js": [
+				"addon/content.js"
+			]
+		}
+	]
+}
