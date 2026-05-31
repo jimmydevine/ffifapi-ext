@@ -1,9 +1,18 @@
 {
 	"manifest_version": 2,
 	"name": "ffifapi",
-	"version": "1.4",
+	"version": "1.5",
 	"description": "Firefox Interface API Extension over Websockets",
-	
+
+	"browser_specific_settings": {
+		"gecko": {
+			"id": "{d7bf81a7-d089-43a3-9268-6360baa1326c}",
+			"data_collection_permissions": {
+				"required": ["none"]
+			}
+		}
+	},
+
 	"background": {
 		"scripts": [
 			"addon/background.js",

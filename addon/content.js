@@ -82,7 +82,15 @@ browser.runtime.onMessage.addListener(async (data, sender) => {
 			})(data.selectors || [], data.texts || [], data.maxY !== undefined ? data.maxY : null, data.minX !== undefined ? data.minX : null);
 		case 'selectRegion':
 		return new Promise((resolve) => {
-			// Create overlay
+			// fixedW/fixedH switches the picker to follow-cursor
+			// mode: a pre-sized box tracks the mouse, and a single
+			// click commits the position. Useful for placing a
+			// fixed bounding rect around uniformly-sized icons.
+			// Without those, the legacy click-and-drag rectangle
+			// picker is used.
+			let fixedW = data && data.fixedW ? Number(data.fixedW) : null;
+			let fixedH = data && data.fixedH ? Number(data.fixedH) : null;
+
 			let overlay = document.createElement('div');
 			overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:999999;cursor:crosshair;background:rgba(0,0,0,0.15);';
 
@@ -95,6 +103,46 @@ browser.runtime.onMessage.addListener(async (data, sender) => {
 			document.body.appendChild(overlay);
 			document.body.appendChild(box);
 			document.body.appendChild(coords);
+
+			let escHandler = (e) => {
+				if (e.key === 'Escape') {
+					overlay.remove();
+					box.remove();
+					coords.remove();
+					document.removeEventListener('keydown', escHandler);
+					resolve(null);
+				}
+			};
+			document.addEventListener('keydown', escHandler);
+
+			if (fixedW && fixedH) {
+				box.style.display = 'block';
+				box.style.width = fixedW + 'px';
+				box.style.height = fixedH + 'px';
+				coords.style.display = 'block';
+				let positionAt = (cx, cy) => {
+					let x = Math.round(cx - fixedW / 2);
+					let y = Math.round(cy - fixedH / 2);
+					box.style.left = x + 'px';
+					box.style.top = y + 'px';
+					coords.style.left = x + 'px';
+					coords.style.top = (y - 24) + 'px';
+					coords.textContent = `x=${x} y=${y} w=${fixedW} h=${fixedH}`;
+				};
+				overlay.addEventListener('mousemove', (e) => {
+					positionAt(e.clientX, e.clientY);
+				});
+				overlay.addEventListener('click', (e) => {
+					let x = Math.round(e.clientX - fixedW / 2);
+					let y = Math.round(e.clientY - fixedH / 2);
+					overlay.remove();
+					box.remove();
+					coords.remove();
+					document.removeEventListener('keydown', escHandler);
+					resolve({ x: x, y: y, w: fixedW, h: fixedH });
+				});
+				return;
+			}
 
 			let startX, startY, dragging = false;
 
@@ -130,25 +178,13 @@ browser.runtime.onMessage.addListener(async (data, sender) => {
 				let w = Math.abs(e.clientX - startX);
 				let h = Math.abs(e.clientY - startY);
 
-				// Clean up
 				overlay.remove();
 				box.remove();
 				coords.remove();
+				document.removeEventListener('keydown', escHandler);
 
 				resolve({ x: x, y: y, w: w, h: h });
 			});
-
-			// ESC to cancel
-			let escHandler = (e) => {
-				if (e.key === 'Escape') {
-					overlay.remove();
-					box.remove();
-					coords.remove();
-					document.removeEventListener('keydown', escHandler);
-					resolve(null);
-				}
-			};
-			document.addEventListener('keydown', escHandler);
 		});
 	case 'trackMouse':
 		return new Promise((resolve) => {

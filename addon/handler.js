@@ -62,7 +62,7 @@ class Handler {
 			case 'clickElement':
 				return await this.browser.clickElement(msg.tab, msg.selector);
 			case 'selectRegion':
-				return await this.browser._sendToTab(null, { cmd: 'selectRegion' });
+				return await this.browser._sendToTab(null, { cmd: 'selectRegion', fixedW: msg.fixedW, fixedH: msg.fixedH });
 			case 'trackMouse':
 				return await this.browser._sendToTab(null, { cmd: 'trackMouse' });
 		}
