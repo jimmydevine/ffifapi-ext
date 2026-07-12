@@ -52,7 +52,7 @@ class Handler {
 				browser.runtime.reload();
 				return true;
 			case 'executeScript':
-				return await this.browser.executeScript(msg.tab, msg.code);
+				return await this.browser.executeScript(msg.tab, msg.code, msg.allFrames);
 			case 'getViewportOrigin':
 				return await this.browser.getViewportOrigin(msg.tab);
 			case 'findElement':

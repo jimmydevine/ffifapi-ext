@@ -171,7 +171,7 @@ class Browser {
 	* Execute a JavaScript code string in the given tab (defaults to active tab).
 	* Returns the value of the last evaluated expression.
 	*******************************************************************************************************************************/
-	async executeScript(tab, code) {
+	async executeScript(tab, code, allFrames) {
 		if (!tab)
 		{
 			let tabs = await this.getTabs();
@@ -180,7 +180,13 @@ class Browser {
 				if (t.active) { tab = t.id; break; }
 			}
 		}
-		let results = await browser.tabs.executeScript(tab, { code: code });
+		let opts = { code: code };
+		if (allFrames) opts.allFrames = true;
+		let results = await browser.tabs.executeScript(tab, opts);
+		// allFrames: return the full per-frame result array (index 0 is the top
+		// frame, others are sub-frames) so callers can reach a cross-origin
+		// game iframe. Otherwise keep the legacy single-value behaviour.
+		if (allFrames) return (results !== undefined) ? results : [];
 		return (results !== undefined && results.length > 0) ? results[0] : null;
 	}
 

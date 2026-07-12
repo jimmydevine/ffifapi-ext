@@ -26,13 +26,22 @@
 		"activeTab",
 		"cookies",
 		"contextualIdentities",
-		"alarms"
+		"alarms",
+		"<all_urls>"
 	],
 	"content_scripts": [
 		{
 			"matches": ["http://*/*", "https://*/*"],
 			"js": [
 				"addon/content.js"
+			]
+		},
+		{
+			"matches": ["http://*/*", "https://*/*"],
+			"all_frames": true,
+			"run_at": "document_start",
+			"js": [
+				"addon/capture.js"
 			]
 		}
 	]
