@@ -61,6 +61,9 @@
 				var NW = function (u, p) {
 					var w = (p !== undefined) ? new OW(u, p) : new OW(u);
 					push({ k: 'ws-open', url: '' + u });
+					// Stash the live game socket so its own send() can be replayed
+					// (e.g. to request market data without driving the UI).
+					try { if (('' + u).indexOf('cgg4game') > -1) window.__ffws = w; } catch (e) {}
 					try { w.addEventListener('message', function (ev) {
 						var d = ev.data;
 						if (typeof d === 'string') push({ k: 'ws', url: '' + u, body: d.slice(0, 8000) });
@@ -70,8 +73,14 @@
 					try {
 						var osend = w.send;
 						w.send = function (m) {
-							try { push({ k: 'ws-send', url: '' + u,
-								body: (typeof m === 'string') ? m.slice(0, 2000) : ('<bin ' + ((m && (m.byteLength || m.size)) || 0) + '>') }); } catch (e) {}
+							try {
+								var o = { k: 'ws-send', url: '' + u };
+								if (typeof m === 'string') { o.body = m.slice(0, 2000); }
+								else if (m instanceof ArrayBuffer) { o.body = '<bin ' + m.byteLength + '>'; o.b64 = __ff_b64(m, 4000); }
+								else if (m && m.buffer instanceof ArrayBuffer) { o.body = '<bin ' + (m.byteLength || 0) + '>'; o.b64 = __ff_b64(m.buffer, 4000); }
+								else { o.body = '<bin ' + ((m && (m.byteLength || m.size)) || 0) + '>'; }
+								push(o);
+							} catch (e) {}
 							return osend.apply(this, arguments);
 						};
 					} catch (e) {}
