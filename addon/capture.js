@@ -67,7 +67,7 @@
 					try { w.addEventListener('message', function (ev) {
 						var d = ev.data;
 						if (typeof d === 'string') push({ k: 'ws', url: '' + u, body: d.slice(0, 8000) });
-						else if (d instanceof ArrayBuffer) push({ k: 'ws-bin', url: '' + u, n: d.byteLength, b64: __ff_b64(d, 260000) });
+						else if (d instanceof ArrayBuffer) push({ k: 'ws-bin', url: '' + u, n: d.byteLength, b64: __ff_b64(d, 2000000) });
 						else push({ k: 'ws-blob', url: '' + u });
 					}); } catch (e) {}
 					try {
