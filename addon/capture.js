@@ -51,14 +51,31 @@
 								else for (var k in h) hdrs[k] = h[k];
 							}
 							var rb = (init.body != null) ? init.body : null;
-							req = { method: init.method || src0.method || 'GET', headers: hdrs,
-							        body: (rb != null ? ('' + rb).slice(0, 40000) : null) };
+							req = { method: init.method || src0.method || 'GET', headers: hdrs, body: null };
+							if (rb != null) {
+								if (typeof rb === 'string') req.body = rb.slice(0, 60000);
+								else if (rb.byteLength !== undefined && !rb.text) {
+									// ArrayBuffer / TypedArray — keep bytes as base64.
+									req.body = '<bin ' + (rb.byteLength || 0) + '>';
+									req.b64 = __ff_b64(rb.buffer || rb, 200000);
+								} else if (rb.text || rb instanceof Blob) {
+									// Blob (the client commits a compressed/binary Blob).
+									// Read it async and back-fill req.b64 on the same object.
+									req.body = '<blob ' + (rb.size || 0) + ' ' + (rb.type || '') + '>';
+									try { rb.arrayBuffer().then(function (ab) {
+										req.b64 = __ff_b64(ab, 200000);
+									}, function () {}); } catch (e) {}
+								} else { req.body = ('' + rb).slice(0, 60000); }
+							}
 						}
 					} catch (e) {}
 					var p = of.apply(this, a);
 					try { p.then(function (r) {
 						try { r.clone().text().then(function (t) {
-							var o = { k: 'fetch', url: url, body: ('' + t).slice(0, 8000) };
+							// Keep gs_api responses whole (state loads are big and the
+							// chest data can sit past 8000); trim everything else.
+							var cap = (url.indexOf('/gs_api/') > -1) ? 200000 : 8000;
+							var o = { k: 'fetch', url: url, body: ('' + t).slice(0, cap) };
 							if (req) o.req = req;
 							push(o);
 						}, function () {}); } catch (e) {}
