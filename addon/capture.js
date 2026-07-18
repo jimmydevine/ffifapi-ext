@@ -74,8 +74,9 @@
 						try { r.clone().text().then(function (t) {
 							// Keep gs_api responses whole (state loads are big and the
 							// chest data can sit past 8000); trim everything else.
-							var cap = (url.indexOf('/gs_api/') > -1) ? 200000 : 8000;
+							var cap = (url.indexOf('/gs_api/') > -1) ? 40000 : 8000;
 							var o = { k: 'fetch', url: url, body: ('' + t).slice(0, cap) };
+								var _ci = ('' + t).indexOf('"ChestBit"'); if (_ci > -1) o.chestbit = ('' + t).slice(_ci, _ci + 3000);
 							if (req) o.req = req;
 							push(o);
 						}, function () {}); } catch (e) {}
