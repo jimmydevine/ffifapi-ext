@@ -37,10 +37,30 @@
 				var of = window.fetch;
 				window.fetch = function () {
 					var a = arguments, url = (a[0] && a[0].url) ? a[0].url : ('' + a[0]);
+					// Capture the REQUEST (method/headers/body) for API calls —
+					// needed to replay auth'd endpoints (headers like PNK-env)
+					// and to read state the client pushes in commit bodies.
+					var req = null;
+					try {
+						if (url.indexOf('/gs_api/') > -1) {
+							var init = a[1] || {}, src0 = a[0] || {};
+							var hdrs = {}, h = init.headers || src0.headers;
+							if (h) {
+								if (typeof h.forEach === 'function') h.forEach(function (v, k) { hdrs[k] = v; });
+								else if (h.length) { for (var i = 0; i < h.length; i++) hdrs[h[i][0]] = h[i][1]; }
+								else for (var k in h) hdrs[k] = h[k];
+							}
+							var rb = (init.body != null) ? init.body : null;
+							req = { method: init.method || src0.method || 'GET', headers: hdrs,
+							        body: (rb != null ? ('' + rb).slice(0, 40000) : null) };
+						}
+					} catch (e) {}
 					var p = of.apply(this, a);
 					try { p.then(function (r) {
 						try { r.clone().text().then(function (t) {
-							push({ k: 'fetch', url: url, body: ('' + t).slice(0, 8000) });
+							var o = { k: 'fetch', url: url, body: ('' + t).slice(0, 8000) };
+							if (req) o.req = req;
+							push(o);
 						}, function () {}); } catch (e) {}
 					}); } catch (e) {}
 					return p;
