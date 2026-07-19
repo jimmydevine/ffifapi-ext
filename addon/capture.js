@@ -42,7 +42,7 @@
 					// and to read state the client pushes in commit bodies.
 					var req = null;
 					try {
-						if (url.indexOf('/gs_api/') > -1) {
+						if (url.indexOf('/gs_api/') > -1 || url.indexOf('get_assets_with_als') > -1) {
 							var init = a[1] || {}, src0 = a[0] || {};
 							var hdrs = {}, h = init.headers || src0.headers;
 							if (h) {
@@ -88,9 +88,18 @@
 			XMLHttpRequest.prototype.open = function (m, u) { this.__m = m; this.__u = u; return xo.apply(this, arguments); };
 			XMLHttpRequest.prototype.send = function (b) {
 				var x = this;
+				// Capture the REQUEST body too, so XHR-based API calls can be
+				// replayed the same way the fetch hook allows above.
+				var reqBody = null;
+				try {
+					if (b != null) reqBody = (typeof b === 'string')
+						? b.slice(0, 60000) : ('' + b).slice(0, 60000);
+				} catch (e) {}
 				try { x.addEventListener('load', function () {
 					var rt = ''; try { rt = x.responseText; } catch (e) { rt = '<' + (x.responseType || '') + '>'; }
-					push({ k: 'xhr', url: '' + x.__u, m: x.__m, body: ('' + rt).slice(0, 8000) });
+					var o = { k: 'xhr', url: '' + x.__u, m: x.__m, body: ('' + rt).slice(0, 8000) };
+					if (reqBody != null) o.req = { method: x.__m, body: reqBody };
+					push(o);
 				}); } catch (e) {}
 				return xs.apply(this, arguments);
 			};
