@@ -78,6 +78,10 @@
 									: (url.indexOf('/gs_api/') > -1) ? 40000 : 8000;
 							var o = { k: 'fetch', url: url, body: ('' + t).slice(0, cap) };
 								var _ci = ('' + t).indexOf('"ChestBit"'); if (_ci > -1) o.chestbit = ('' + t).slice(_ci, _ci + 3000);
+							// Pin the latest full player-state load so it survives ring-buffer
+							// eviction (login fires it once; the battle-pass state reader needs
+							// it long after).
+							if (url.indexOf('profile/load') > -1) { try { window.__ffprofile = o.body; } catch (e) {} }
 							if (req) o.req = req;
 							push(o);
 						}, function () {}); } catch (e) {}
