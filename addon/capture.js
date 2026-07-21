@@ -71,11 +71,27 @@
 					} catch (e) {}
 					var p = of.apply(this, a);
 					try { p.then(function (r) {
+						// Some gs_api responses are BINARY msgpack (the maze /
+						// LabyrinthExpedition state), which .text() corrupts to
+						// U+FFFD. Capture those as raw bytes (base64) instead.
+						try {
+							if (url.indexOf('expedition/') > -1 || url.indexOf('labyrinth') > -1) {
+								r.clone().arrayBuffer().then(function (ab) {
+									var o = { k: 'fetch', url: url,
+										body: '<bin ' + (ab.byteLength || 0) + '>',
+										b64: __ff_b64(ab, 6000000) };
+									if (req) o.req = req;
+									push(o);
+								}, function () {});
+								return;
+							}
+						} catch (e) {}
 						try { r.clone().text().then(function (t) {
 							// Keep gs_api responses whole (state loads are big and the
 							// chest data can sit past 8000); trim everything else.
 							var cap = (url.indexOf('profile/load') > -1) ? 6000000
-									: (url.indexOf('/gs_api/') > -1) ? 40000 : 8000;
+									: (url.indexOf('get_opponent') > -1) ? 6000000
+										: (url.indexOf('/gs_api/') > -1) ? 40000 : 8000;
 							var o = { k: 'fetch', url: url, body: ('' + t).slice(0, cap) };
 								var _ci = ('' + t).indexOf('"ChestBit"'); if (_ci > -1) o.chestbit = ('' + t).slice(_ci, _ci + 3000);
 							// Pin the latest full player-state load so it survives ring-buffer
