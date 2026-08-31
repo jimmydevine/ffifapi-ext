@@ -42,7 +42,7 @@
 					// and to read state the client pushes in commit bodies.
 					var req = null;
 					try {
-						if (url.indexOf('/gs_api/') > -1 || url.indexOf('get_assets_with_als') > -1) {
+						if (url.indexOf('/gs_api/') > -1 || url.indexOf('get_assets_with_als') > -1 || (url.indexOf('balancy.dev') > -1 && url.indexOf('/saves') > -1)) {
 							var init = a[1] || {}, src0 = a[0] || {};
 							var hdrs = {}, h = init.headers || src0.headers;
 							if (h) {
@@ -50,10 +50,10 @@
 								else if (h.length) { for (var i = 0; i < h.length; i++) hdrs[h[i][0]] = h[i][1]; }
 								else for (var k in h) hdrs[k] = h[k];
 							}
-							var rb = (init.body != null) ? init.body : null;
+							var rb = (init.body != null) ? init.body : null; var isSave = (url.indexOf('balancy.dev') > -1 && url.indexOf('/saves') > -1);
 							req = { method: init.method || src0.method || 'GET', headers: hdrs, body: null };
 							if (rb != null) {
-								if (typeof rb === 'string') req.body = rb.slice(0, 60000);
+								if (typeof rb === 'string') { req.body = rb.slice(0, isSave ? 2000000 : 60000); if (isSave) { try { window.__ffsave = rb; } catch (e) {} } }
 								else if (rb.byteLength !== undefined && !rb.text) {
 									// ArrayBuffer / TypedArray — keep bytes as base64.
 									req.body = '<bin ' + (rb.byteLength || 0) + '>';
@@ -63,7 +63,7 @@
 									// Read it async and back-fill req.b64 on the same object.
 									req.body = '<blob ' + (rb.size || 0) + ' ' + (rb.type || '') + '>';
 									try { rb.arrayBuffer().then(function (ab) {
-										req.b64 = __ff_b64(ab, 200000);
+										if (isSave) { try { var _t = new TextDecoder().decode(ab); req.body = _t.slice(0, 2000000); window.__ffsave = _t; } catch (e) {} } else { req.b64 = __ff_b64(ab, 200000); }
 									}, function () {}); } catch (e) {}
 								} else { req.body = ('' + rb).slice(0, 60000); }
 							}
