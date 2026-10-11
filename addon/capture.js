@@ -124,6 +124,64 @@
 				}); } catch (e) {}
 				return xs.apply(this, arguments);
 			};
+			// PA diamond ledger. Every change to the diamond balance arrives as
+			// User.getInfo.i['@s.gc'] (the NEW balance) in a reply's `c` cache
+			// delta, or in a push. Requests are flat JSON ({...params, reqId,
+			// route}), so remembering them by reqId names what each change was
+			// for. Each change is handed to the content script (a DOM event, so
+			// the game's own window 'message' listeners never see it), which
+			// forwards it to the service as it happens: nothing waits in the
+			// page to be lost on a reload, and no poller has to re-install it.
+			var dg = { reqs: {}, order: [], last: null, td: null };
+			var dgText = function (d) {
+				try {
+					var u8 = (d instanceof ArrayBuffer) ? new Uint8Array(d)
+						: new Uint8Array(d.buffer, d.byteOffset || 0, d.byteLength);
+					var i = u8.indexOf(123);
+					if (i < 0) return null;
+					dg.td = dg.td || new TextDecoder();
+					return dg.td.decode(u8.subarray(i)).replace(/\0+$/, '');
+				} catch (e) { return null; }
+			};
+			var dgSent = function (m) {
+				try {
+					if (typeof m === 'string' || !m) return;
+					var s = dgText(m); if (!s) return;
+					var o = JSON.parse(s); if (o.reqId === undefined) return;
+					var p = {}; for (var k in o) if (k !== 'reqId' && k !== 'route') p[k] = o[k];
+					dg.reqs[o.reqId] = { route: o.route, p: p };
+					dg.order.push(o.reqId);
+					if (dg.order.length > 300) delete dg.reqs[dg.order.shift()];
+				} catch (e) {}
+			};
+			var dgRecv = function (d) {
+				try {
+					if (typeof d === 'string' || !d) return;
+					var s = dgText(d);
+					if (!s || s.indexOf('"User.getInfo"') < 0 || !/"(@s\.)?gc":/.test(s)) return;
+					var env = JSON.parse(s), dd = (env && env.d) || {}, body = dd.d || {};
+					var c = body.c || dd.c || {}, i = (c['User.getInfo'] || {}).i || {};
+					var after = (i['@s.gc'] !== undefined) ? i['@s.gc'] : i.gc;
+					if (typeof after !== 'number') return;
+					// Balance before: our own last sighting, else the client's
+					// cache (this listener is added before the client's own, so
+					// the cache has not taken this frame yet).
+					var before = dg.last;
+					if (before === null) {
+						try { var g = window.solar && window.solar.cache.get('User.getInfo', 'i.gc');
+							if (typeof g === 'number') before = g; } catch (e) {}
+					}
+					dg.last = after;
+					if (before === after) return;
+					var rq = (body.reqId !== undefined) ? dg.reqs[body.reqId] : null;
+					var ev = { t: Date.now(), route: dd.t || (rq && rq.route) || null,
+						p: rq ? rq.p : null, reqId: (body.reqId !== undefined) ? body.reqId : null,
+						before: before, after: after, awds: body.awds || null };
+					var txt = JSON.stringify(ev);
+					if (txt.length > 8000) { ev.awds = null; ev.p = null; txt = JSON.stringify(ev); }
+					document.dispatchEvent(new CustomEvent('ffifapi-dg', { detail: txt }));
+				} catch (e) {}
+			};
 			if (window.WebSocket) {
 				var OW = window.WebSocket;
 				var NW = function (u, p) {
@@ -131,9 +189,11 @@
 					push({ k: 'ws-open', url: '' + u });
 					// Stash the live game socket so its own send() can be replayed
 					// (e.g. to request market data without driving the UI).
-					try { if (('' + u).indexOf('cgg4game') > -1) window.__ffws = w; } catch (e) {}
+					var game = false;
+					try { if (('' + u).indexOf('cgg4game') > -1) { window.__ffws = w; game = true; } } catch (e) {}
 					try { w.addEventListener('message', function (ev) {
 						var d = ev.data;
+						if (game) dgRecv(d);
 						if (typeof d === 'string') push({ k: 'ws', url: '' + u, body: d.slice(0, 8000) });
 						else if (d instanceof ArrayBuffer) push({ k: 'ws-bin', url: '' + u, n: d.byteLength, b64: __ff_b64(d, 2000000) });
 						else push({ k: 'ws-blob', url: '' + u });
@@ -141,6 +201,7 @@
 					try {
 						var osend = w.send;
 						w.send = function (m) {
+							if (game) dgSent(m);
 							try {
 								var o = { k: 'ws-send', url: '' + u };
 								if (typeof m === 'string') { o.body = m.slice(0, 2000); }
@@ -159,6 +220,15 @@
 				try { window.WebSocket = NW; } catch (e) {}
 			}
 		}.toString() + ')();';
+		// The page-world diamond hook above reports here; pass each change on to
+		// the background, which sends it to the service unsolicited (buffered
+		// there while the service is down).
+		document.addEventListener('ffifapi-dg', function (e) {
+			try {
+				var ev = JSON.parse('' + e.detail);
+				browser.runtime.sendMessage({ cmd: 'pa-diamond', ev: ev });
+			} catch (err) {}
+		});
 		var s = document.createElement('script');
 		s.textContent = code;
 		(document.documentElement || document.head || document.body).appendChild(s);
