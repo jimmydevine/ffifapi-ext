@@ -154,10 +154,55 @@
 					if (dg.order.length > 300) delete dg.reqs[dg.order.shift()];
 				} catch (e) {}
 			};
+			// PA purchase log. A reply to a shop BUY route (s.b city/diamond
+			// shop, s.d party, s.e party refresh, s.g event, s.i merged-server,
+			// s.k garden, s.n diamond buy, s.p diamond unlock) is reported with
+			// its request, its awards, and every currency / bag count it moved
+			// -- before is the client's cache, which has not taken this frame
+			// yet. Hand purchases included. Reads (s.a/c/f/h/j/o) are not buys.
+			var PU_BUY = { 's.b': 1, 's.d': 1, 's.e': 1, 's.g': 1, 's.i': 1, 's.k': 1, 's.n': 1, 's.p': 1 };
+			var puRecv = function (s) {
+				try {
+					var m = s.match(/"reqId":(\d+)/);
+					var rq = m ? dg.reqs[m[1]] : null;
+					if (!rq || !PU_BUY[rq.route] || !window.solar) return;
+					var S = window.solar, env = JSON.parse(s), body = ((env || {}).d || {}).d || {};
+					var it = S.Config.get('item_json') || {};
+					var nm = function (id) { var c = it[id]; try { return c ? S.tr(c.name) : ''; } catch (e) { return ''; } };
+					var c = body.c || {}, ui = (c['User.getInfo'] || {}).i || {}, cur = {}, items = {};
+					for (var k in ui) {
+						if (k.indexOf('@s.') !== 0 || typeof ui[k] !== 'number') continue;
+						var f = k.slice(3), b = S.cache.get('User.getInfo', 'i.' + f);
+						var pid = (window.PropType && typeof window.PropType[f] === 'number') ? window.PropType[f] : null;
+						if (typeof b === 'number' && b !== ui[k]) cur[f] = [String(b), String(ui[k]), pid ? nm(pid) : ''];
+					}
+					var bl = (c['Bag.getList'] || {}).l || {};
+					for (var key in bl) {
+						var id = key.split('_@').pop(), v = (bl[key] || {})['@s.num'];
+						if (typeof v !== 'number') continue;
+						var b0 = 0; try { b0 = window.PropModel.getNum(+id); } catch (e) {}
+						if (b0 !== v) items[id] = [b0, v, nm(+id)];
+					}
+					var row = null, p = rq.p || {};
+					var cfg = rq.route === 's.b' ? 'shop_json' : rq.route === 's.g' ? 'festivalShop_json' : null;
+					if (cfg && p.id !== undefined) {
+						var r = (S.Config.get(cfg) || {})[p.id];
+						if (r) row = { shoptype: r.shoptype, propId: r.propId, name: nm(r.propId), needPropId: r.needPropId, need: r.needNum };
+					}
+					var aw = (body.awds && body.awds.length !== undefined ? body.awds : (body.awds ? [body.awds] : [])).map(function (a) {
+						var pid = (a.propId !== undefined) ? a.propId : a.cId; return { propId: pid, num: a.num, name: nm(pid) }; });
+					var ev = { t: Date.now(), route: rq.route, p: p, s: (body.s === undefined ? null : body.s),
+						msg: body.msg || null, awds: aw, cur: cur, items: items, row: row };
+					var txt = JSON.stringify(ev);
+					if (txt.length > 16000) { ev.items = {}; ev.awds = ev.awds.slice(0, 20); txt = JSON.stringify(ev); }
+					document.dispatchEvent(new CustomEvent('ffifapi-pu', { detail: txt }));
+				} catch (e) {}
+			};
 			var dgRecv = function (d) {
 				try {
 					if (typeof d === 'string' || !d) return;
 					var s = dgText(d);
+					if (s && s.indexOf('"reqId"') > -1) puRecv(s);
 					if (!s || s.indexOf('"User.getInfo"') < 0 || !/"(@s\.)?gc":/.test(s)) return;
 					var env = JSON.parse(s), dd = (env && env.d) || {}, body = dd.d || {};
 					var c = body.c || dd.c || {}, i = (c['User.getInfo'] || {}).i || {};
@@ -223,6 +268,12 @@
 		// The page-world diamond hook above reports here; pass each change on to
 		// the background, which sends it to the service unsolicited (buffered
 		// there while the service is down).
+		document.addEventListener('ffifapi-pu', function (e) {
+			try {
+				var ev = JSON.parse('' + e.detail);
+				browser.runtime.sendMessage({ cmd: 'pa-purchase', ev: ev });
+			} catch (err) {}
+		});
 		document.addEventListener('ffifapi-dg', function (e) {
 			try {
 				var ev = JSON.parse('' + e.detail);
